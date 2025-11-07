@@ -7,12 +7,13 @@ const fetcher = (u: string) => fetch(u).then(r => r.json())
 
 export default function Dashboard() {
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
-    refreshInterval: 5000, // elke 5 seconden automatisch vernieuwen
+    refreshInterval: 5000,
   })
 
   const [status, setStatus] = useState('ALL')
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<any>(null)
+
   const leads = (data?.leads || [])
     .filter((l: any) => status === 'ALL' || l.status === status)
     .filter((l: any) =>
@@ -26,10 +27,7 @@ export default function Dashboard() {
       <header className="sticky top-0 z-10 backdrop-blur bg-hyp-bg/70 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold">Hypasus — Lead management</h1>
-          <a
-            href="/api/auth/signout"
-            className="text-sm underline/20 hover:underline"
-          >
+          <a href="/api/auth/signout" className="text-sm underline/20 hover:underline">
             Log uit
           </a>
         </div>
@@ -50,9 +48,7 @@ export default function Dashboard() {
           >
             <option value="ALL">Alle statussen</option>
             {['A', 'B', 'C', 'D', 'E', 'F', 'Gesloten'].map(s => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
           <button
@@ -86,17 +82,13 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {isLoading && (
-                <tr>
-                  <td className="p-4" colSpan={6}>
-                    Laden…
-                  </td>
-                </tr>
+                <tr><td className="p-4" colSpan={6}>Laden…</td></tr>
               )}
               {leads.map((l: any) => (
                 <tr
                   key={l.id}
                   className={`border-t border-white/10 hover:bg-white/[0.03] transition ${
-                    l.status === 'CLOSED'
+                    l.status === 'Gesloten'
                       ? 'bg-red-500/5'
                       : l.status === 'A'
                       ? 'bg-green-500/5'
@@ -122,21 +114,16 @@ export default function Dashboard() {
                   </td>
 
                   <td className="p-3">
-                    <button
-                      className="underline/20 hover:underline mr-3"
-                      onClick={() => setSelected(l)}
-                    >
+                    <button className="underline/20 hover:underline mr-3" onClick={() => setSelected(l)}>
                       Open
                     </button>
-                    {l.status !== 'CLOSED' ? (
+
+                    {l.status !== 'Gesloten' ? (
                       <button
                         className="underline/20 hover:underline"
                         onClick={async () => {
-                          const updatedLeads = (data?.leads || []).map(
-                            (lead: any) =>
-                              lead.id === l.id
-                                ? { ...lead, status: 'Gesloten' }
-                                : lead
+                          const updatedLeads = (data?.leads || []).map((lead: any) =>
+                            lead.id === l.id ? { ...lead, status: 'Gesloten' } : lead
                           )
                           mutate({ leads: updatedLeads }, false)
 
@@ -144,11 +131,11 @@ export default function Dashboard() {
                             await fetch('/api/leads/updateStatus', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                id: l.id,
-                                status: 'Gesloten',
-                              }),
+                              body: JSON.stringify({ id: l.id, status: 'Gesloten' }),
                             })
+                            // wacht even zodat Google Sheets klaar is
+                            await new Promise(r => setTimeout(r, 1500))
+                            mutate()
                           } catch (err) {
                             console.error('Status update failed:', err)
                           }
@@ -160,11 +147,8 @@ export default function Dashboard() {
                       <button
                         className="underline/20 hover:underline"
                         onClick={async () => {
-                          const updatedLeads = (data?.leads || []).map(
-                            (lead: any) =>
-                              lead.id === l.id
-                                ? { ...lead, status: 'A' }
-                                : lead
+                          const updatedLeads = (data?.leads || []).map((lead: any) =>
+                            lead.id === l.id ? { ...lead, status: 'A' } : lead
                           )
                           mutate({ leads: updatedLeads }, false)
 
@@ -174,6 +158,8 @@ export default function Dashboard() {
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ id: l.id, status: 'A' }),
                             })
+                            await new Promise(r => setTimeout(r, 1500))
+                            mutate()
                           } catch (err) {
                             console.error('Status update failed:', err)
                           }
@@ -186,98 +172,42 @@ export default function Dashboard() {
                 </tr>
               ))}
               {!isLoading && leads.length === 0 && (
-                <tr>
-                  <td className="p-4" colSpan={6}>
-                    Geen leads gevonden.
-                  </td>
-                </tr>
+                <tr><td className="p-4" colSpan={6}>Geen leads gevonden.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
       {selected && (
         <LeadModal
           lead={selected}
           onClose={() => setSelected(null)}
-          onChanged={() => {
-            setSelected(null)
-            mutate()
-          }}
+          onChanged={() => { setSelected(null); mutate(); }}
         />
       )}
     </main>
   )
 }
 
-function LeadModal({
-  lead,
-  onClose,
-  onChanged,
-}: {
-  lead: any
-  onClose: () => void
-  onChanged: () => void
-}) {
+function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => void, onChanged: () => void }) {
   const isNew = lead.id === 'NEW'
   const [form, setForm] = useState({ ...lead })
-  const { data } = useSWR(
-    !isNew ? `/api/leads/notes?id=${lead.id}` : null,
-    u => fetch(u).then(r => r.json())
-  )
+  const { data } = useSWR(!isNew ? `/api/leads/notes?id=${lead.id}` : null, u => fetch(u).then(r => r.json()))
 
   return (
     <div className="fixed inset-0 z-20 flex items-end md:items-center justify-center bg-black/50 p-4">
-      <motion.div
-        initial={{ y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="w-full max-w-2xl rounded-2xl border border-white/10 bg-hyp-card p-6 relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 text-white/70 hover:text-white"
-        >
-          ✕
-        </button>
-        <h3 className="text-xl font-semibold">
-          {isNew ? 'Nieuwe lead' : `Lead #${lead.id}`}
-        </h3>
+      <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-2xl rounded-2xl border border-white/10 bg-hyp-card p-6 relative">
+        <button onClick={onClose} className="absolute right-4 top-4 text-white/70 hover:text-white">✕</button>
+        <h3 className="text-xl font-semibold">{isNew ? 'Nieuwe lead' : `Lead #${lead.id}`}</h3>
 
         <div className="grid md:grid-cols-2 gap-3 mt-4">
-          <input
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-            placeholder="Naam"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-          />
-          <input
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-            placeholder="Telefoon"
-            value={form.phone}
-            onChange={e => setForm({ ...form, phone: e.target.value })}
-          />
-          <input
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-            placeholder="Probleem"
-            value={form.problem}
-            onChange={e => setForm({ ...form, problem: e.target.value })}
-          />
-          <input
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-            placeholder="Extra info"
-            value={form.extra}
-            onChange={e => setForm({ ...form, extra: e.target.value })}
-          />
-          <select
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-            value={form.status}
-            onChange={e => setForm({ ...form, status: e.target.value })}
-          >
-            {['A', 'B', 'C', 'D', 'E', 'F', 'Gesloten'].map((s: string) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
+          <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Naam" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Telefoon" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+          <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Probleem" value={form.problem} onChange={e => setForm({ ...form, problem: e.target.value })} />
+          <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Extra info" value={form.extra} onChange={e => setForm({ ...form, extra: e.target.value })} />
+          <select className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+            {['A', 'B', 'C', 'D', 'E', 'F', 'Gesloten'].map((s: string) => (<option key={s} value={s}>{s}</option>))}
           </select>
         </div>
 
@@ -286,16 +216,13 @@ function LeadModal({
             className="rounded-xl px-4 py-2 bg-hyp-primary/90 hover:bg-hyp-primary text-black font-semibold shadow-glow"
             onClick={async () => {
               const url = isNew ? '/api/leads/create' : '/api/leads/update'
-              await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
-              })
+              await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
               onChanged()
             }}
           >
             {isNew ? 'Aanmaken' : 'Opslaan'}
           </button>
+
           {!isNew && (
             <button
               className="rounded-xl px-4 py-2 border border-white/15 hover:bg-white/10"
@@ -308,6 +235,7 @@ function LeadModal({
                     status: form.status === 'Gesloten' ? 'A' : 'Gesloten',
                   }),
                 })
+                await new Promise(r => setTimeout(r, 1500))
                 onChanged()
               }}
             >
@@ -323,42 +251,26 @@ function LeadModal({
 }
 
 function Notes({ leadId }: { leadId: string }) {
-  const { data, mutate } = useSWR(`/api/leads/notes?id=${leadId}`, u =>
-    fetch(u).then(r => r.json())
-  )
+  const { data, mutate } = useSWR(`/api/leads/notes?id=${leadId}`, u => fetch(u).then(r => r.json()))
   const [note, setNote] = useState('')
   return (
     <div className="mt-6">
       <h4 className="font-semibold">Notities</h4>
       <div className="mt-2 space-y-2 max-h-56 overflow-auto pr-1">
         {(data?.notes || []).map((n: any, i: number) => (
-          <div
-            key={i}
-            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-          >
-            <div className="text-xs text-white/60">
-              {n.author} • {n.timestamp}
-            </div>
+          <div key={i} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+            <div className="text-xs text-white/60">{n.author} • {n.timestamp}</div>
             <div className="mt-1 text-sm">{n.note}</div>
           </div>
         ))}
       </div>
       <div className="mt-3 flex gap-2">
-        <input
-          value={note}
-          onChange={e => setNote(e.target.value)}
-          placeholder="Schrijf een notitie..."
-          className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2"
-        />
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Schrijf een notitie..." className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2" />
         <button
           className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/10"
           onClick={async () => {
             if (!note.trim()) return
-            await fetch('/api/leads/notes/add', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: leadId, note }),
-            })
+            await fetch('/api/leads/notes/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: leadId, note }) })
             setNote('')
             mutate()
           }}
