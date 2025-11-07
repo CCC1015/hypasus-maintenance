@@ -5,8 +5,9 @@ import authOptions from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions as any)
-    const email = (session?.user?.email || "unknown@user").toString()
+    const session: any = await getServerSession(authOptions as any)
+const email = session?.user?.email ? String(session.user.email) : "unknown@user"
+
 
     const body = await req.json()
     const id = body?.id
