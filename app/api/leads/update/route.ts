@@ -20,6 +20,6 @@ export async function POST(req: Request){
     body.status==='Gesloten' ? (rows[idx][7] || new Date().toISOString()) : '',
     rows[idx][8]||''
   ]
-  await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range:`Leads!A${rowIndex}:I${rowIndex}`, valueInputOption:'RAW', requestBody:{ values:[row] } })
+  await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range:`Sheet1!A${rowIndex}:I${rowIndex}`, valueInputOption:'RAW', requestBody:{ values:[row] } })
   return NextResponse.json({ ok:true })
 }
