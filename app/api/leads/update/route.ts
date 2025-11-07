@@ -17,7 +17,7 @@ export async function POST(req: Request){
     body.problem||'',
     body.extra||'',
     body.status||'A',
-    body.status==='CLOSED' ? (rows[idx][7] || new Date().toISOString()) : '',
+    body.status==='Gesloten' ? (rows[idx][7] || new Date().toISOString()) : '',
     rows[idx][8]||''
   ]
   await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range:`Leads!A${rowIndex}:I${rowIndex}`, valueInputOption:'RAW', requestBody:{ values:[row] } })

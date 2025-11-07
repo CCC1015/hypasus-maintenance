@@ -1,17 +1,32 @@
-import { NextResponse } from "next/server"
-import { getSheetsClient, SHEET_ID } from "@/lib/sheets"
+import { NextResponse } from "next/server";
+import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
-export async function POST(req: Request){
-  const body = await req.json()
-  const sheets = await getSheetsClient()
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range:'Leads!A2:I' })
-  const rows = res.data.values || []
-  const idx = rows.findIndex((r:string[])=>r[0]===body.id)
-  if (idx===-1) return NextResponse.json({ok:false,error:'Not found'},{status:404})
-  const rowIndex = idx+2
-  const row = rows[idx]
-  row[6] = body.status
-  row[7] = body.status==='CLOSED' ? (row[7] || new Date().toISOString()) : ''
-  await sheets.spreadsheets.values.update({ spreadsheetId: SHEET_ID, range:`Leads!A${rowIndex}:I${rowIndex}`, valueInputOption:'RAW', requestBody:{ values:[row] } })
-  return NextResponse.json({ ok:true })
+export async function POST(req: Request) {
+  try {
+    const { id, status } = await req.json();
+    if (!id || typeof status !== "string") {
+      return NextResponse.json({ error: "Missing id or status" }, { status: 400 });
+    }
+
+    const sheets = await getSheetsClient();
+
+    // id=1 hoort bij sheet-rij 2 (rij 1 = headers)
+    const sheetRow = Number(id) + 1; // 1-based rij in Google Sheets
+    const targetRange = `Sheet1!F${sheetRow}`; // kolom F = Status
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: targetRange,
+      valueInputOption: "RAW",
+      requestBody: { values: [[status]] },
+    });
+
+    return NextResponse.json({ ok: true, id, status, range: targetRange });
+  } catch (err: any) {
+    console.error("❌ updateStatus error:", err?.message || err);
+    return NextResponse.json(
+      { error: err?.message || "Failed to update status" },
+      { status: 500 }
+    );
+  }
 }
