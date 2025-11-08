@@ -1,3 +1,6 @@
+export const revalidate = 0
+export const dynamic = "force-dynamic"
+
 import { NextResponse } from "next/server";
 import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
@@ -20,7 +23,12 @@ export async function GET() {
       status: r[5] === "Gesloten" ? "Gesloten" : (r[5] || "A"),
     }));
 
-    return NextResponse.json({ leads });
+    const resJson = NextResponse.json({ leads });
+
+    // 🚫 Belangrijk: cache headers uitzetten
+    resJson.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+
+    return resJson;
   } catch (err: any) {
     console.error("❌ Sheets read error:", err);
     return NextResponse.json(

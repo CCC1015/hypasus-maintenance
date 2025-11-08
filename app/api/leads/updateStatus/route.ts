@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
+export const revalidate = 0
+export const dynamic = "force-dynamic"
+
 export async function POST(req: Request) {
   try {
     const { id, status } = await req.json();
