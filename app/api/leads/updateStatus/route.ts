@@ -1,37 +1,32 @@
 import { NextResponse } from "next/server";
 import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
-function toCanonical(status: string) {
-  const s = (status || "").trim().toUpperCase();
-  if (s === "GESLOTEN" || s === "CLOSED") return "CLOSED";
-  // keep only A..F, fallback A
-  return ["A","B","C","D","E","F"].includes(s) ? s : "A";
-}
-
 export async function POST(req: Request) {
   try {
     const { id, status } = await req.json();
-    if (id == null || typeof status !== "string") {
-      return NextResponse.json({ error: "Missing id or status" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
     const sheets = await getSheetsClient();
-    const sheetRow = Number(id) + 1;           // header is row 1
-    const targetRange = `Sheet1!F${sheetRow}`; // Status = col F
-    const canon = toCanonical(status);
+    const row = Number(id) + 1; // omdat header rij 1 is
+    const range = `Sheet1!F${row}`;
+
+    // status direct zoals frontend 'm stuurt (A-F of 'Gesloten')
+    const newStatus = status === "Gesloten" ? "Gesloten" : status;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: targetRange,
+      range,
       valueInputOption: "RAW",
-      requestBody: { values: [[canon]] },
+      requestBody: { values: [[newStatus]] },
     });
 
-    return NextResponse.json({ ok: true, id, status: canon, range: targetRange });
+    return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("❌ updateStatus error:", err?.message || err);
+    console.error("❌ updateStatus error:", err);
     return NextResponse.json(
-      { error: err?.message || "Failed to update status" },
+      { error: err.message || "Failed to update status" },
       { status: 500 }
     );
   }

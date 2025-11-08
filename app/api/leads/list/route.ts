@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
-function fromCanonicalToUI(s?: string) {
-  if (!s) return "A";
-  const v = s.trim().toUpperCase();
-  if (v === "CLOSED" || v === "GESLOTEN") return "Gesloten";
-  return ["A","B","C","D","E","F"].includes(v) ? v : "A";
-}
-
 export async function GET() {
   try {
     const sheets = await getSheetsClient();
@@ -24,13 +17,14 @@ export async function GET() {
       phone: r[2] || "",
       problem: r[3] || "",
       extra: r[4] || "",
-      status: fromCanonicalToUI(r[5]),
+      status: r[5] === "Gesloten" ? "Gesloten" : (r[5] || "A"),
     }));
 
     return NextResponse.json({ leads });
   } catch (err: any) {
+    console.error("❌ Sheets read error:", err);
     return NextResponse.json(
-      { error: err?.message || "Failed to read Google Sheets" },
+      { error: err.message || "Failed to read Google Sheets" },
       { status: 500 }
     );
   }

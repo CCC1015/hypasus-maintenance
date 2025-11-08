@@ -5,14 +5,6 @@ import { motion } from 'framer-motion'
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
-// Helpers om canonical <-> UI status te vertalen
-function toCanonical(ui: string) {
-  return ui === 'Gesloten' ? 'CLOSED' : ui
-}
-function toUI(canon: string) {
-  return canon === 'CLOSED' ? 'Gesloten' : canon
-}
-
 export default function Dashboard() {
   const [isUpdating, setIsUpdating] = useState(false)
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
@@ -26,9 +18,7 @@ export default function Dashboard() {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<any>(null)
 
-  // Normaliseer inkomende data naar UI-vriendelijke labels
   const leads = (data?.leads || [])
-    .map((l: any) => ({ ...l, status: toUI(l.status) }))
     .filter((l: any) => status === 'ALL' || l.status === status)
     .filter((l: any) =>
       (l.name + l.phone + l.problem + l.extra)
@@ -38,12 +28,10 @@ export default function Dashboard() {
 
   async function toggleStatus(l: any) {
     setIsUpdating(true)
-    const newUI = l.status === 'Gesloten' ? 'A' : 'Gesloten'
-    const newCanonical = toCanonical(newUI)
+    const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
 
-    // Optimistische update
     const optimistic = (data?.leads || []).map((lead: any) =>
-      lead.id === l.id ? { ...lead, status: newUI } : lead
+      lead.id === l.id ? { ...lead, status: newStatus } : lead
     )
     mutate({ leads: optimistic }, false)
 
@@ -51,14 +39,13 @@ export default function Dashboard() {
       await fetch('/api/leads/updateStatus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: l.id, status: newCanonical }),
+        body: JSON.stringify({ id: l.id, status: newStatus }),
       })
-
       await new Promise(r => setTimeout(r, 1200))
-      await mutate() // haal verse data van server
+      await mutate()
     } catch (err) {
-      console.error('❌ Status update failed:', err)
-      await mutate() // fallback refresh
+      console.error(err)
+      await mutate()
     } finally {
       setIsUpdating(false)
     }
@@ -76,7 +63,6 @@ export default function Dashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* FILTERS */}
         <div className="grid md:grid-cols-4 gap-3">
           <input
             className="md:col-span-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-hyp-primary/60"
@@ -111,7 +97,6 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* TABLE */}
         <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10">
           <table className="w-full text-sm">
             <thead className="bg-white/5">
@@ -226,14 +211,13 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
             <button
               className="rounded-xl px-4 py-2 border border-white/15 hover:bg-white/10"
               onClick={async () => {
-                const newUI = form.status === 'Gesloten' ? 'A' : 'Gesloten'
-                const newCanon = toCanonical(newUI)
+                const newStatus = form.status === 'Gesloten' ? 'A' : 'Gesloten'
                 await fetch('/api/leads/updateStatus', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     id: lead.id,
-                    status: newCanon,
+                    status: newStatus,
                   }),
                 })
                 await new Promise(r => setTimeout(r, 1200))
