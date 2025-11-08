@@ -6,9 +6,15 @@ import { motion } from 'framer-motion'
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
 export default function Dashboard() {
-  const [isUpdating, setIsUpdating] = useState(false) // 👈 toegevoegd
+  const [isUpdating, setIsUpdating] = useState(false)
+
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
-    refreshInterval: isUpdating ? 0 : 5000, // ⏸️ pauzeer tijdens updates
+    refreshInterval: 5000,
+    revalidateOnFocus: true,
+    revalidateIfStale: true,
+    onSuccess: (fetched) => {
+      if (!isUpdating) mutate(fetched, false)
+    },
   })
 
   const [status, setStatus] = useState('ALL')
@@ -22,6 +28,32 @@ export default function Dashboard() {
         .toLowerCase()
         .includes(q.toLowerCase())
     )
+
+  async function toggleStatus(l: any) {
+    setIsUpdating(true)
+    const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
+
+    // Optimistische lokale update
+    const updatedLeads = (data?.leads || []).map((lead: any) =>
+      lead.id === l.id ? { ...lead, status: newStatus } : lead
+    )
+    mutate({ leads: updatedLeads }, false)
+
+    try {
+      await fetch('/api/leads/updateStatus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: l.id, status: newStatus }),
+      })
+      // korte pauze zodat Sheets kan syncen
+      await new Promise(r => setTimeout(r, 2000))
+      mutate()
+    } catch (err) {
+      console.error('Status update failed:', err)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   return (
     <main className="min-h-screen">
@@ -113,40 +145,11 @@ export default function Dashboard() {
                       {l.status}
                     </span>
                   </td>
-
                   <td className="p-3">
                     <button className="underline/20 hover:underline mr-3" onClick={() => setSelected(l)}>
                       Open
                     </button>
-
-                    <button
-                      className="underline/20 hover:underline"
-                      onClick={async () => {
-                        setIsUpdating(true)
-                        const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
-                        
-                        // lokale update
-                        const updatedLeads = (data?.leads || []).map((lead: any) =>
-                          lead.id === l.id ? { ...lead, status: newStatus } : lead
-                        )
-                        mutate({ leads: updatedLeads }, false)
-
-                        // schrijf naar Google Sheets
-                        try {
-                          await fetch('/api/leads/updateStatus', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: l.id, status: newStatus }),
-                          })
-                          await new Promise(r => setTimeout(r, 2000)) // wacht even
-                          mutate() // herlaad nieuwe data
-                        } catch (err) {
-                          console.error('Status update failed:', err)
-                        } finally {
-                          setIsUpdating(false)
-                        }
-                      }}
-                    >
+                    <button className="underline/20 hover:underline" onClick={() => toggleStatus(l)}>
                       {l.status === 'Gesloten' ? 'Heropen' : 'Sluit'}
                     </button>
                   </td>
