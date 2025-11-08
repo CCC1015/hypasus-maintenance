@@ -22,8 +22,8 @@ export async function GET() {
       phone: r[2] || "",
       problem: r[3] || "",
       extra: r[4] || "",
-      status: r[5] || "",
-    }));
+      status: r[5] === "CLOSED" ? "Gesloten" : (r[5] || "A"),
+    }))
 
     return NextResponse.json({ leads });
   } catch (err: any) {
