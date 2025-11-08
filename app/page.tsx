@@ -6,8 +6,9 @@ import { motion } from 'framer-motion'
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
 export default function Dashboard() {
+  const [isUpdating, setIsUpdating] = useState(false) // 👈 toegevoegd
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
-    refreshInterval: 5000,
+    refreshInterval: isUpdating ? 0 : 5000, // ⏸️ pauzeer tijdens updates
   })
 
   const [status, setStatus] = useState('ALL')
@@ -118,56 +119,36 @@ export default function Dashboard() {
                       Open
                     </button>
 
-                    {l.status !== 'Gesloten' ? (
-                      <button
-                        className="underline/20 hover:underline"
-                        onClick={async () => {
-                          const updatedLeads = (data?.leads || []).map((lead: any) =>
-                            lead.id === l.id ? { ...lead, status: 'Gesloten' } : lead
-                          )
-                          mutate({ leads: updatedLeads }, false)
+                    <button
+                      className="underline/20 hover:underline"
+                      onClick={async () => {
+                        setIsUpdating(true)
+                        const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
+                        
+                        // lokale update
+                        const updatedLeads = (data?.leads || []).map((lead: any) =>
+                          lead.id === l.id ? { ...lead, status: newStatus } : lead
+                        )
+                        mutate({ leads: updatedLeads }, false)
 
-                          try {
-                            await fetch('/api/leads/updateStatus', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ id: l.id, status: 'Gesloten' }),
-                            })
-                            // wacht even zodat Google Sheets klaar is
-                            await new Promise(r => setTimeout(r, 1500))
-                            mutate()
-                          } catch (err) {
-                            console.error('Status update failed:', err)
-                          }
-                        }}
-                      >
-                        Sluit
-                      </button>
-                    ) : (
-                      <button
-                        className="underline/20 hover:underline"
-                        onClick={async () => {
-                          const updatedLeads = (data?.leads || []).map((lead: any) =>
-                            lead.id === l.id ? { ...lead, status: 'A' } : lead
-                          )
-                          mutate({ leads: updatedLeads }, false)
-
-                          try {
-                            await fetch('/api/leads/updateStatus', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ id: l.id, status: 'A' }),
-                            })
-                            await new Promise(r => setTimeout(r, 1500))
-                            mutate()
-                          } catch (err) {
-                            console.error('Status update failed:', err)
-                          }
-                        }}
-                      >
-                        Heropen
-                      </button>
-                    )}
+                        // schrijf naar Google Sheets
+                        try {
+                          await fetch('/api/leads/updateStatus', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: l.id, status: newStatus }),
+                          })
+                          await new Promise(r => setTimeout(r, 2000)) // wacht even
+                          mutate() // herlaad nieuwe data
+                        } catch (err) {
+                          console.error('Status update failed:', err)
+                        } finally {
+                          setIsUpdating(false)
+                        }
+                      }}
+                    >
+                      {l.status === 'Gesloten' ? 'Heropen' : 'Sluit'}
+                    </button>
                   </td>
                 </tr>
               ))}
