@@ -12,9 +12,7 @@ export default function Dashboard() {
     refreshInterval: 5000,
     revalidateOnFocus: true,
     revalidateIfStale: true,
-    onSuccess: (fetched) => {
-      if (!isUpdating) mutate(fetched, false)
-    },
+    dedupingInterval: 1000,
   })
 
   const [status, setStatus] = useState('ALL')
@@ -33,23 +31,32 @@ export default function Dashboard() {
     setIsUpdating(true)
     const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
 
-    // Optimistische lokale update
-    const updatedLeads = (data?.leads || []).map((lead: any) =>
+    // 1) Optimistische, lokale update (instant feedback)
+    const optimistic = (data?.leads || []).map((lead: any) =>
       lead.id === l.id ? { ...lead, status: newStatus } : lead
     )
-    mutate({ leads: updatedLeads }, false)
+    mutate({ leads: optimistic }, false)
 
     try {
+      // 2) Schrijf naar backend/Sheets
       await fetch('/api/leads/updateStatus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: l.id, status: newStatus }),
       })
-      // korte pauze zodat Sheets kan syncen
-      await new Promise(r => setTimeout(r, 2000))
-      mutate()
-    } catch (err) {
-      console.error('Status update failed:', err)
+
+      // 3) Korte buffer zodat Sheets sync klaar is
+      await new Promise(r => setTimeout(r, 1200))
+
+      // 4) Atomische verversing: vervang store met vers opgehaalde serverdata
+      await mutate(async () => {
+        const fresh = await fetch('/api/leads/list').then(r => r.json())
+        return fresh
+      }, false)
+    } catch (e) {
+      console.error(e)
+      // optioneel: rollback (als je wil)
+      // await mutate()
     } finally {
       setIsUpdating(false)
     }
@@ -219,7 +226,7 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
                     status: form.status === 'Gesloten' ? 'A' : 'Gesloten',
                   }),
                 })
-                await new Promise(r => setTimeout(r, 1500))
+                await new Promise(r => setTimeout(r, 1200))
                 onChanged()
               }}
             >
