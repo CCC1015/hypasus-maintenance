@@ -5,9 +5,16 @@ import { motion } from 'framer-motion'
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
+// Helpers om canonical <-> UI status te vertalen
+function toCanonical(ui: string) {
+  return ui === 'Gesloten' ? 'CLOSED' : ui
+}
+function toUI(canon: string) {
+  return canon === 'CLOSED' ? 'Gesloten' : canon
+}
+
 export default function Dashboard() {
   const [isUpdating, setIsUpdating] = useState(false)
-
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
     refreshInterval: 5000,
     revalidateOnFocus: true,
@@ -19,7 +26,9 @@ export default function Dashboard() {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<any>(null)
 
+  // Normaliseer inkomende data naar UI-vriendelijke labels
   const leads = (data?.leads || [])
+    .map((l: any) => ({ ...l, status: toUI(l.status) }))
     .filter((l: any) => status === 'ALL' || l.status === status)
     .filter((l: any) =>
       (l.name + l.phone + l.problem + l.extra)
@@ -29,34 +38,27 @@ export default function Dashboard() {
 
   async function toggleStatus(l: any) {
     setIsUpdating(true)
-    const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
+    const newUI = l.status === 'Gesloten' ? 'A' : 'Gesloten'
+    const newCanonical = toCanonical(newUI)
 
-    // 1) Optimistische, lokale update (instant feedback)
+    // Optimistische update
     const optimistic = (data?.leads || []).map((lead: any) =>
-      lead.id === l.id ? { ...lead, status: newStatus } : lead
+      lead.id === l.id ? { ...lead, status: newUI } : lead
     )
     mutate({ leads: optimistic }, false)
 
     try {
-      // 2) Schrijf naar backend/Sheets
       await fetch('/api/leads/updateStatus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: l.id, status: newStatus }),
+        body: JSON.stringify({ id: l.id, status: newCanonical }),
       })
 
-      // 3) Korte buffer zodat Sheets sync klaar is
       await new Promise(r => setTimeout(r, 1200))
-
-      // 4) Atomische verversing: vervang store met vers opgehaalde serverdata
-      await mutate(async () => {
-        const fresh = await fetch('/api/leads/list').then(r => r.json())
-        return fresh
-      }, false)
-    } catch (e) {
-      console.error(e)
-      // optioneel: rollback (als je wil)
-      // await mutate()
+      await mutate() // haal verse data van server
+    } catch (err) {
+      console.error('❌ Status update failed:', err)
+      await mutate() // fallback refresh
     } finally {
       setIsUpdating(false)
     }
@@ -74,6 +76,7 @@ export default function Dashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* FILTERS */}
         <div className="grid md:grid-cols-4 gap-3">
           <input
             className="md:col-span-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-hyp-primary/60"
@@ -108,6 +111,7 @@ export default function Dashboard() {
           </button>
         </div>
 
+        {/* TABLE */}
         <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10">
           <table className="w-full text-sm">
             <thead className="bg-white/5">
@@ -156,7 +160,11 @@ export default function Dashboard() {
                     <button className="underline/20 hover:underline mr-3" onClick={() => setSelected(l)}>
                       Open
                     </button>
-                    <button className="underline/20 hover:underline" onClick={() => toggleStatus(l)}>
+                    <button
+                      disabled={isUpdating}
+                      className="underline/20 hover:underline"
+                      onClick={() => toggleStatus(l)}
+                    >
                       {l.status === 'Gesloten' ? 'Heropen' : 'Sluit'}
                     </button>
                   </td>
@@ -218,12 +226,14 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
             <button
               className="rounded-xl px-4 py-2 border border-white/15 hover:bg-white/10"
               onClick={async () => {
+                const newUI = form.status === 'Gesloten' ? 'A' : 'Gesloten'
+                const newCanon = toCanonical(newUI)
                 await fetch('/api/leads/updateStatus', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     id: lead.id,
-                    status: form.status === 'Gesloten' ? 'A' : 'Gesloten',
+                    status: newCanon,
                   }),
                 })
                 await new Promise(r => setTimeout(r, 1200))

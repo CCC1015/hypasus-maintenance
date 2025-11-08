@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSheetsClient, SHEET_ID } from "@/lib/sheets";
 
-function normalizeStatus(s?: string) {
+function fromCanonicalToUI(s?: string) {
   if (!s) return "A";
-  const v = s.trim().toLowerCase();
-  if (v === "closed" || v === "gesloten") return "Gesloten";
-  // voor A..F – ook “ a ” → “A”
-  return s.trim().toUpperCase();
+  const v = s.trim().toUpperCase();
+  if (v === "CLOSED" || v === "GESLOTEN") return "Gesloten";
+  return ["A","B","C","D","E","F"].includes(v) ? v : "A";
 }
 
 export async function GET() {
@@ -18,15 +17,14 @@ export async function GET() {
     });
 
     const rows = res.data.values || [];
-
     const leads = rows.slice(1).map((r: string[], i: number) => ({
-      id: i + 1,                    // index-based id
+      id: i + 1,
       datetime: r[0] || "",
       name: r[1] || "",
       phone: r[2] || "",
       problem: r[3] || "",
       extra: r[4] || "",
-      status: normalizeStatus(r[5]), // ⬅️ belangrijkste regel
+      status: fromCanonicalToUI(r[5]),
     }));
 
     return NextResponse.json({ leads });
