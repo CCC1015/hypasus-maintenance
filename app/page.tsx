@@ -5,10 +5,37 @@ import { motion } from 'framer-motion'
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
+// UI kleuren per status: F (groen) -> A (geel), Gesloten (rood)
+function badgeClass(s: string) {
+  switch (s) {
+    case 'Gesloten': return 'bg-green-500/20 text-green-400'
+    case 'F': return 'bg-green-500/20 text-green-400'
+    case 'E': return 'bg-emerald-500/20 text-emerald-400'
+    case 'D': return 'bg-lime-500/20 text-lime-400'
+    case 'C': return 'bg-yellow-400/20 text-yellow-300'
+    case 'B': return 'bg-amber-400/25 text-amber-300'
+    case 'A': return 'bg-amber-500/30 text-amber-300'
+    default: return 'bg-white/10 text-white/80'
+  }
+}
+
+function rowTint(s: string) {
+  switch (s) {
+    case 'Gesloten': return 'bg-green-500/5'
+    case 'F': return 'bg-green-500/5'
+    case 'E': return 'bg-emerald-500/5'
+    case 'D': return 'bg-lime-500/5'
+    case 'C': return 'bg-yellow-400/5'
+    case 'B': return 'bg-amber-400/5'
+    case 'A': return 'bg-amber-500/5'
+    default: return ''
+  }
+}
+
 export default function Dashboard() {
   const [isUpdating, setIsUpdating] = useState(false)
   const { data, mutate, isLoading } = useSWR('/api/leads/list', fetcher, {
-    refreshInterval: 5000,
+    refreshInterval: isUpdating ? 0 : 5000,
     revalidateOnFocus: true,
     revalidateIfStale: true,
     dedupingInterval: 1000,
@@ -18,8 +45,13 @@ export default function Dashboard() {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<any>(null)
 
+  // ✅ Show all except "Gesloten" when "ALL" is selected
   const leads = (data?.leads || [])
-    .filter((l: any) => status === 'ALL' || l.status === status)
+    .filter((l: any) =>
+      status === 'ALL'
+        ? l.status !== 'Gesloten'
+        : l.status === status
+    )
     .filter((l: any) =>
       (l.name + l.phone + l.problem + l.extra)
         .toLowerCase()
@@ -28,8 +60,9 @@ export default function Dashboard() {
 
   async function toggleStatus(l: any) {
     setIsUpdating(true)
-    const newStatus = l.status === 'Gesloten' ? 'A' : 'Gesloten'
+    const newStatus = l.status === 'Gesloten' ? 'F' : 'Gesloten'
 
+    // Optimistic UI
     const optimistic = (data?.leads || []).map((lead: any) =>
       lead.id === l.id ? { ...lead, status: newStatus } : lead
     )
@@ -41,10 +74,10 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: l.id, status: newStatus }),
       })
-      await new Promise(r => setTimeout(r, 1200))
+      await new Promise(r => setTimeout(r, 2500))
       await mutate()
     } catch (err) {
-      console.error(err)
+      console.error('❌ Status update failed:', err)
       await mutate()
     } finally {
       setIsUpdating(false)
@@ -55,10 +88,8 @@ export default function Dashboard() {
     <main className="min-h-screen">
       <header className="sticky top-0 z-10 backdrop-blur bg-hyp-bg/70 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Hypasus — Lead Management Tool</h1>
-          <a href="/api/auth/signout" className="text-sm underline/20 hover:underline">
-            Log uit
-          </a>
+          <h1 className="text-xl font-semibold">Hypasus — Lead management</h1>
+          <a href="/api/auth/signout" className="text-sm underline/20 hover:underline">Log uit</a>
         </div>
       </header>
 
@@ -75,8 +106,8 @@ export default function Dashboard() {
             value={status}
             onChange={e => setStatus(e.target.value)}
           >
-            <option value="ALL">Alle statussen</option>
-            {['A', 'B', 'C', 'D', 'E', 'F', 'Gesloten'].map(s => (
+            <option value="ALL">Alle statussen (zonder gesloten)</option>
+            {['F', 'E', 'D', 'C', 'B', 'A', 'Gesloten'].map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
@@ -88,7 +119,7 @@ export default function Dashboard() {
                 phone: '',
                 problem: '',
                 extra: '',
-                status: 'A',
+                status: 'F',
               })
             }
             className="rounded-xl px-4 py-3 bg-hyp-primary/90 hover:bg-hyp-primary text-black font-semibold transition shadow-glow"
@@ -116,28 +147,14 @@ export default function Dashboard() {
               {leads.map((l: any) => (
                 <tr
                   key={l.id}
-                  className={`border-t border-white/10 hover:bg-white/[0.03] transition ${
-                    l.status === 'Gesloten'
-                      ? 'bg-red-500/5'
-                      : l.status === 'A'
-                      ? 'bg-green-500/5'
-                      : ''
-                  }`}
+                  className={`border-t border-white/10 hover:bg-white/[0.03] transition ${rowTint(l.status)}`}
                 >
                   <td className="p-3">{l.datetime}</td>
                   <td className="p-3">{l.name}</td>
                   <td className="p-3">{l.phone}</td>
                   <td className="p-3">{l.problem}</td>
                   <td className="p-3">
-                    <span
-                      className={`rounded-lg px-2 py-1 font-semibold ${
-                        l.status === 'Gesloten'
-                          ? 'bg-red-500/20 text-red-400'
-                          : l.status === 'A'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-white/10 text-white/80'
-                      }`}
-                    >
+                    <span className={`rounded-lg px-2 py-1 font-semibold ${badgeClass(l.status)}`}>
                       {l.status}
                     </span>
                   </td>
@@ -179,6 +196,14 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
   const [form, setForm] = useState({ ...lead })
   const { data } = useSWR(!isNew ? `/api/leads/notes?id=${lead.id}` : null, u => fetch(u).then(r => r.json()))
 
+  async function saveStatusOnly(id: string | number, status: string) {
+    await fetch('/api/leads/updateStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status })
+    })
+  }
+
   return (
     <div className="fixed inset-0 z-20 flex items-end md:items-center justify-center bg-black/50 p-4">
       <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-2xl rounded-2xl border border-white/10 bg-hyp-card p-6 relative">
@@ -190,8 +215,18 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
           <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Telefoon" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
           <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Probleem" value={form.problem} onChange={e => setForm({ ...form, problem: e.target.value })} />
           <input className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="Extra info" value={form.extra} onChange={e => setForm({ ...form, extra: e.target.value })} />
-          <select className="rounded-xl bg-white/5 border border-white/10 px-3 py-2" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-            {['A', 'B', 'C', 'D', 'E', 'F', 'Gesloten'].map((s: string) => (<option key={s} value={s}>{s}</option>))}
+          <select
+            className="rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+            value={form.status}
+            onChange={async e => {
+              const s = e.target.value
+              setForm({ ...form, status: s })
+              if (!isNew) await saveStatusOnly(lead.id, s)
+            }}
+          >
+            {['F', 'E', 'D', 'C', 'B', 'A', 'Gesloten'].map((s: string) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
         </div>
 
@@ -211,20 +246,14 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
             <button
               className="rounded-xl px-4 py-2 border border-white/15 hover:bg-white/10"
               onClick={async () => {
-                const newStatus = form.status === 'Gesloten' ? 'A' : 'Gesloten'
-                await fetch('/api/leads/updateStatus', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    id: lead.id,
-                    status: newStatus,
-                  }),
-                })
-                await new Promise(r => setTimeout(r, 1200))
+                const newStatus = form.status === 'Gesloten' ? 'F' : 'Gesloten'
+                setForm({ ...form, status: newStatus })
+                await saveStatusOnly(lead.id, newStatus)
+                await new Promise(r => setTimeout(r, 2500))
                 onChanged()
               }}
             >
-              {form.status === 'Gesloten' ? 'Heropen' : 'Sluit'}
+              {form.status === 'Gesloten' ? 'Heropen (→ F)' : 'Sluit'}
             </button>
           )}
         </div>
@@ -236,7 +265,7 @@ function LeadModal({ lead, onClose, onChanged }: { lead: any, onClose: () => voi
 }
 
 function Notes({ leadId }: { leadId: string }) {
-  const { data, mutate } = useSWR(`/api/leads/notes?id=${leadId}`, u => fetch(u).then(r => r.json()))
+  const { data, mutate } = useSWR(`/api/leads/notes?id=${leadId}`, (u) => fetch(u).then(r => r.json()))
   const [note, setNote] = useState('')
   return (
     <div className="mt-6">
@@ -250,7 +279,12 @@ function Notes({ leadId }: { leadId: string }) {
         ))}
       </div>
       <div className="mt-3 flex gap-2">
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Schrijf een notitie..." className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2" />
+        <input
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="Schrijf een notitie..."
+          className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+        />
         <button
           className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/10"
           onClick={async () => {
