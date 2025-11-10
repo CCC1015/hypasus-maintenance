@@ -88,7 +88,7 @@ export default function Dashboard() {
     <main className="min-h-screen">
       <header className="sticky top-0 z-10 backdrop-blur bg-hyp-bg/70 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Hypasus — Lead management</h1>
+          <h1 className="text-xl font-semibold">Hypasus — Lead Management Tool</h1>
           <a href="/api/auth/signout" className="text-sm underline/20 hover:underline">Log uit</a>
         </div>
       </header>
